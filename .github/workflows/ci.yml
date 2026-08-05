@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+
+    # A real SQL Server, not a stand-in. The migrations, the stored procedures and the
+    # seed are exercised against the engine they were written for, so a T-SQL mistake
+    # fails here rather than in front of whoever runs the app next.
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Str0ng!Passw0rd"
+          MSSQL_PID: Developer
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Str0ng!Passw0rd' -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 30s
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      - name: Unit tests
+        run: dotnet test --no-build -c Release --verbosity normal
+
+      - name: Start the API against SQL Server
+        env:
+          ConnectionStrings__LibraryDb: "Server=localhost,1433;Database=LibrarySystem;User Id=sa;Password=Str0ng!Passw0rd;TrustServerCertificate=True;Encrypt=False"
+          ASPNETCORE_URLS: "http://localhost:5080"
+        run: |
+          dotnet run --project src/Library.Api --no-build -c Release > api.log 2>&1 &
+          echo $! > api.pid
+
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:5080/health > /dev/null 2>&1; then
+              echo "API is up."
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "::error::The API did not become healthy in time."
+          cat api.log
+          exit 1
+
+      # Hitting the endpoints proves the procedures were created and run, which a unit
+      # test with substituted ports cannot tell us.
+      - name: Smoke-test the endpoints
+        run: |
+          set -euo pipefail
+
+          echo "--- catalogue search (usp_SearchBooks) ---"
+          total=$(curl -fsS "http://localhost:5080/api/books?query=le%20guin" | jq '.totalCount')
+          echo "matches: $total"
+          [ "$total" -gt 0 ] || { echo "::error::Search returned nothing; the seed or the procedure is wrong."; exit 1; }
+
+          book_id=$(curl -fsS "http://localhost:5080/api/books?availableOnly=true" | jq -r '.items[0].id')
+          member_id=$(curl -fsS "http://localhost:5080/api/members" | jq -r '.[0].id')
+          key="ci-$(date +%s)"
+
+          echo "--- check-out (usp_CheckoutCopy) ---"
+          first=$(curl -fsS -X POST http://localhost:5080/api/loans/checkout \
+            -H "Content-Type: application/json" -H "Idempotency-Key: $key" \
+            -d "{\"bookId\":\"$book_id\",\"memberId\":\"$member_id\"}")
+          echo "$first" | jq -c '{barcode: .loan.barcode, replay: .wasAlreadyProcessed}'
+          [ "$(echo "$first" | jq -r '.wasAlreadyProcessed')" = "false" ] \
+            || { echo "::error::A first check-out was reported as a replay."; exit 1; }
+
+          echo "--- same key again: must not lend a second copy ---"
+          second=$(curl -fsS -X POST http://localhost:5080/api/loans/checkout \
+            -H "Content-Type: application/json" -H "Idempotency-Key: $key" \
+            -d "{\"bookId\":\"$book_id\",\"memberId\":\"$member_id\"}")
+          echo "$second" | jq -c '{barcode: .loan.barcode, replay: .wasAlreadyProcessed}'
+
+          [ "$(echo "$second" | jq -r '.wasAlreadyProcessed')" = "true" ] \
+            || { echo "::error::Idempotency failed: the retry was treated as a new loan."; exit 1; }
+          [ "$(echo "$first" | jq -r '.loan.id')" = "$(echo "$second" | jq -r '.loan.id')" ] \
+            || { echo "::error::Idempotency failed: the retry produced a different loan."; exit 1; }
+
+          echo "--- check-in ---"
+          copy_id=$(echo "$first" | jq -r '.loan.bookCopyId')
+          curl -fsS -X POST http://localhost:5080/api/loans/checkin \
+            -H "Content-Type: application/json" \
+            -d "{\"bookCopyId\":\"$copy_id\"}" | jq -c '{returned: .loan.returnedAtUtc, fee: .feeCharged}'
+
+          echo "All smoke tests passed."
+
+      - name: API log
+        if: failure()
+        run: cat api.log || true
+
+      - name: Stop the API
+        if: always()
+        run: kill "$(cat api.pid)" 2>/dev/null || true
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build

@@ -1,0 +1,65 @@
+# Runs the whole system with one command:
+#
+#   docker compose up --build
+#
+#   API      http://localhost:5080   (OpenAPI at /openapi/v1.json)
+#   Web      http://localhost:3000
+#
+# The API applies migrations, creates the stored procedures and seeds the catalogue
+# on start-up, so there is nothing to run by hand afterwards.
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Str0ng!Passw0rd"
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      # The API waits for this: starting against a database that is still coming up
+      # just produces a confusing first-run failure.
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  api:
+    build:
+      context: .
+      dockerfile: src/Library.Api/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__LibraryDb: "Server=db,1433;Database=LibrarySystem;User Id=sa;Password=Str0ng!Passw0rd;TrustServerCertificate=True;Encrypt=False"
+      Cors__AllowedOrigins__0: "http://localhost:3000"
+      # Optional. Without it the AI button is hidden rather than shown and broken.
+      Gemini__ApiKey: "${GEMINI_API_KEY:-}"
+      ASPNETCORE_ENVIRONMENT: Production
+    ports:
+      - "5080:8080"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        # Baked in at build time: NEXT_PUBLIC_* values are inlined into the bundle
+        # the browser downloads, so they cannot be supplied at run time.
+        NEXT_PUBLIC_API_URL: "http://localhost:5080"
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  mssql-data:
