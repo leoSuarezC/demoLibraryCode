@@ -58,91 +58,13 @@ jobs:
           dotnet run --project src/Library.Api --no-build -c Release > api.log 2>&1 &
           echo $! > api.pid
 
-          for i in $(seq 1 60); do
-            if curl -fsS http://localhost:5080/health > /dev/null 2>&1; then
-              echo "API is up."
-              exit 0
-            fi
-            sleep 2
-          done
-
-          echo "::error::The API did not become healthy in time."
-          cat api.log
-          exit 1
-
-      # Hitting the endpoints proves the procedures were created and run, which a unit
-      # test with substituted ports cannot tell us.
-      - name: Smoke-test the endpoints
-        run: |
-          set -euo pipefail
-          API=http://localhost:5080
-
-          echo "--- the catalogue is not public ---"
-          anon=$(curl -s -o /dev/null -w '%{http_code}' "$API/api/books")
-          [ "$anon" = "401" ] \
-            || { echo "::error::Anonymous access returned $anon, expected 401."; exit 1; }
-
-          echo "--- sign in as a librarian ---"
-          librarian=$(curl -fsS -X POST "$API/api/auth/token" \
-            -H "Content-Type: application/json" \
-            -d '{"accountId":"staff-librarian"}' | jq -r '.accessToken')
-          AUTH="Authorization: Bearer $librarian"
-
-          echo "--- a librarian may not delete (403) ---"
-          forbidden=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
-            -H "$AUTH" "$API/api/books/00000000-0000-0000-0000-000000000001")
-          [ "$forbidden" = "403" ] \
-            || { echo "::error::Librarian delete returned $forbidden, expected 403."; exit 1; }
-
-          echo "--- catalogue search (usp_SearchBooks) ---"
-          total=$(curl -fsS -H "$AUTH" "$API/api/books?query=le%20guin" | jq '.totalCount')
-          echo "matches: $total"
-          [ "$total" -gt 0 ] \
-            || { echo "::error::Search returned nothing; the seed or the procedure is wrong."; exit 1; }
-
-          book_id=$(curl -fsS -H "$AUTH" "$API/api/books?availableOnly=true" | jq -r '.items[0].id')
-          member_id=$(curl -fsS -H "$AUTH" "$API/api/members" | jq -r '.[0].id')
-          key="ci-$(date +%s)"
-
-          echo "--- check-out (usp_CheckoutCopy) ---"
-          first=$(curl -fsS -X POST "$API/api/loans/checkout" \
-            -H "$AUTH" -H "Content-Type: application/json" -H "Idempotency-Key: $key" \
-            -d "{\"bookId\":\"$book_id\",\"memberId\":\"$member_id\"}")
-          echo "$first" | jq -c '{barcode: .loan.barcode, replay: .wasAlreadyProcessed}'
-          [ "$(echo "$first" | jq -r '.wasAlreadyProcessed')" = "false" ] \
-            || { echo "::error::A first check-out was reported as a replay."; exit 1; }
-
-          echo "--- same key again: must not lend a second copy ---"
-          second=$(curl -fsS -X POST "$API/api/loans/checkout" \
-            -H "$AUTH" -H "Content-Type: application/json" -H "Idempotency-Key: $key" \
-            -d "{\"bookId\":\"$book_id\",\"memberId\":\"$member_id\"}")
-          echo "$second" | jq -c '{barcode: .loan.barcode, replay: .wasAlreadyProcessed}'
-
-          [ "$(echo "$second" | jq -r '.wasAlreadyProcessed')" = "true" ] \
-            || { echo "::error::Idempotency failed: the retry was treated as a new loan."; exit 1; }
-          [ "$(echo "$first" | jq -r '.loan.id')" = "$(echo "$second" | jq -r '.loan.id')" ] \
-            || { echo "::error::Idempotency failed: the retry produced a different loan."; exit 1; }
-
-          echo "--- a borrower cannot read the member roster (403) ---"
-          member_token=$(curl -fsS -X POST "$API/api/auth/token" \
-            -H "Content-Type: application/json" \
-            -d "{\"accountId\":\"member-$member_id\"}" | jq -r '.accessToken')
-          roster=$(curl -s -o /dev/null -w '%{http_code}' \
-            -H "Authorization: Bearer $member_token" "$API/api/members")
-          [ "$roster" = "403" ] \
-            || { echo "::error::Member read the roster with $roster, expected 403."; exit 1; }
-
-          echo "--- but can see their own loans ---"
-          curl -fsS -H "Authorization: Bearer $member_token" "$API/api/loans/mine" \
-            | jq -c 'length as $n | {myLoans: $n}'
-
-          echo "--- check-in ---"
-          copy_id=$(echo "$first" | jq -r '.loan.bookCopyId')
-          curl -fsS -X POST "$API/api/loans/checkin" \
-            -H "$AUTH" -H "Content-Type: application/json" \
-            -d "{\"bookCopyId\":\"$copy_id\"}" | jq -c '{returned: .loan.returnedAtUtc, fee: .feeCharged}'
-
-          echo "All smoke tests passed."
+      # Hitting the live endpoints proves the procedures were created and actually
+      # run, which a unit test with substituted ports cannot tell us. The same script
+      # runs locally against docker compose, so CI and a developer check the same
+      # things in the same order.
+      - name: Smoke-test the running system
+        shell: pwsh
+        run: ./scripts/smoke-test.ps1 -ApiUrl http://localhost:5080
 
       - name: API log
         if: failure()
