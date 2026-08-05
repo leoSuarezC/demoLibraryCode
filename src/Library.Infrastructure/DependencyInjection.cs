@@ -1,5 +1,7 @@
 using Library.Application.Abstractions;
+using Library.Application.Catalog;
 using Library.Application.Common;
+using Library.Application.Loans;
 using Library.Infrastructure.Persistence;
 using Library.Infrastructure.Persistence.Queries;
 using Library.Infrastructure.Persistence.Repositories;
@@ -42,8 +44,14 @@ public static class DependencyInjection
         services.AddScoped<IMemberRepository, MemberRepository>();
         services.AddScoped<ILoanRepository, LoanRepository>();
         services.AddScoped<ICatalogQueries, CatalogQueries>();
+        services.AddScoped<IBarcodeGenerator, SequentialBarcodeGenerator>();
 
         services.AddSingleton<IClock, SystemClock>();
+
+        // Use cases. They depend only on the ports above, which is what keeps them
+        // testable without a database.
+        services.AddScoped<CatalogService>();
+        services.AddScoped<LoanService>();
 
         return services;
     }

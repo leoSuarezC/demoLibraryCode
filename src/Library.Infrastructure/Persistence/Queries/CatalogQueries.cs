@@ -2,8 +2,7 @@ using System.Data;
 using Library.Application.Abstractions;
 using Library.Application.Common;
 using Library.Application.Contracts;
-using Library.Domain;
-using Library.Domain.Entities;
+using Library.Application.Loans;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
@@ -150,33 +149,4 @@ internal static class DataReaderExtensions
         var ordinal = reader.GetOrdinal(column);
         return reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
     }
-}
-
-/// <summary>Shared mapping so loans look the same wherever they surface.</summary>
-public static class LoanMappingExtensions
-{
-    public static LoanSummary ToSummary(this Loan loan, string bookTitle, string barcode, DateTime nowUtc)
-    {
-        var daysOverdue = loan.DaysOverdue(nowUtc);
-
-        return new LoanSummary(
-            loan.Id,
-            loan.BookCopyId,
-            barcode,
-            loan.MemberId,
-            loan.Member?.FullName ?? "Unknown member",
-            bookTitle,
-            loan.CheckedOutAtUtc,
-            loan.DueAtUtc,
-            loan.ReturnedAtUtc,
-            loan.IsOverdue(nowUtc),
-            daysOverdue,
-            LoanPolicy.CalculateOverdueFee(daysOverdue));
-    }
-
-    public static LoanSummary ToSummary(this Loan loan, DateTime nowUtc) =>
-        loan.ToSummary(
-            loan.BookCopy?.Book?.Title ?? "Unknown title",
-            loan.BookCopy?.Barcode ?? "-",
-            nowUtc);
 }
