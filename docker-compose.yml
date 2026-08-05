@@ -11,6 +11,10 @@
 services:
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
+    # Microsoft publishes no arm64 build of this image. Stating the platform makes
+    # Docker Desktop emulate it on an Apple Silicon Mac instead of failing the pull
+    # with "no matching manifest"; on an x86 host it changes nothing.
+    platform: linux/amd64
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "Str0ng!Passw0rd"

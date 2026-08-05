@@ -1,0 +1,40 @@
+# Build context for src/Library.Api/Dockerfile, which builds from the repository
+# root because the projects reference each other across directories.
+#
+# The Dockerfile does `COPY . .` after restoring. Without this file that copy
+# drags in whatever the host happens to have lying around -- build output
+# compiled for another OS, with absolute paths from another machine -- and lays
+# it on top of what the image just restored for itself. `dotnet publish
+# --no-restore` then reads a project.assets.json written by someone else's
+# NuGet and fails. Everything below is either reproduced inside the image or
+# has no business being in it.
+
+**/bin/
+**/obj/
+**/node_modules/
+**/.next/
+**/out/
+
+# The web image builds from ./web with its own context; the API does not need it.
+web/
+
+.git/
+.github/
+.gitignore
+.gitattributes
+.vs/
+.vscode/
+.idea/
+
+# Local configuration and anything holding a secret.
+**/.env
+**/.env.*
+**/appsettings.Development.json
+**/*.user
+
+# Not part of the product.
+inputs/
+scripts/
+README.md
+docker-compose.yml
+**/*.md

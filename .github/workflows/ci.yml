@@ -1,10 +1,12 @@
 name: CI
 
 on:
+  # Every branch, not just main: the value of this pipeline is that a T-SQL
+  # mistake is caught on the branch that introduced it, against a real engine,
+  # before anyone merges or runs the app by hand.
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
-    branches: [main]
 
 env:
   DOTNET_NOLOGO: true

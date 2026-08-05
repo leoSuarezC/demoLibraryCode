@@ -1,0 +1,31 @@
+# Build context for web/Dockerfile.
+#
+# node_modules matters most: the image installs its own with `npm ci` in the
+# deps stage, and the later `COPY . .` would otherwise overwrite it with the
+# host's copy. Next ships platform-specific SWC binaries, so a node_modules
+# built on Windows or macOS does not run in the Alpine image -- the build fails,
+# or worse, half-works.
+
+node_modules/
+.next/
+out/
+build/
+coverage/
+
+# Baked into the bundle at build time via the NEXT_PUBLIC_API_URL build arg,
+# never from a file that happens to be on the machine doing the build.
+.env
+.env.*
+
+.git/
+.gitignore
+Dockerfile
+.dockerignore
+
+npm-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+
+# Written by `next dev`, not part of the app.
+AGENTS.md
+CLAUDE.md

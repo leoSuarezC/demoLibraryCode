@@ -28,6 +28,10 @@ Migrations, stored procedures and seed data are applied on start-up. The catalog
 arrives with 18 titles, 34 copies, 6 members and several open loans — two of them
 deliberately overdue, so the overdue path is visible without waiting three weeks.
 
+First run takes a few minutes: SQL Server has to come up before the API will start.
+On an Apple Silicon Mac, enable **Rosetta for x86/amd64 emulation** in Docker Desktop
+(Settings → General) — Microsoft ships no arm64 build of the SQL Server image.
+
 ### Without Docker
 
 Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download), [Node 20+](https://nodejs.org)

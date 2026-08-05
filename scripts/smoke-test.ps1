@@ -109,6 +109,10 @@ Step "Waiting for $ApiUrl to report healthy"
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $healthy = $false
 
+# The API applies migrations, creates the procedures and seeds before it starts
+# listening, so a first run against an empty SQL Server takes a while. The sleep
+# sits outside the catch on purpose: an API that answers but is not yet healthy
+# would otherwise spin this loop flat out until the deadline.
 while ((Get-Date) -lt $deadline) {
     try {
         if ((Invoke-RestMethod "$ApiUrl/health" -TimeoutSec 5).status -eq "healthy") {
@@ -116,7 +120,8 @@ while ((Get-Date) -lt $deadline) {
             break
         }
     }
-    catch { Start-Sleep -Seconds 2 }
+    catch { }
+    Start-Sleep -Seconds 2
 }
 
 if (-not $healthy) {
