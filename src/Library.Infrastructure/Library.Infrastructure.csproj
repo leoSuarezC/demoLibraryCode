@@ -11,6 +11,15 @@
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
   </ItemGroup>
 
+  <!--
+    Stored procedures ship inside the assembly rather than as loose files. They are
+    versioned with the code that calls them, and there is no output-directory layout
+    to get wrong when the app is published or containerised.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Persistence\Sql\*.sql" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
