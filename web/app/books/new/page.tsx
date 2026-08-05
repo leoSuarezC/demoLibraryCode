@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import type { BookInput } from "@/lib/types";
-import { ErrorNotice, Spinner, SuccessNotice } from "@/components/Feedback";
+import { EmptyState, ErrorNotice, Spinner, SuccessNotice } from "@/components/Feedback";
 
 export default function Page() {
   return (
@@ -17,6 +18,7 @@ export default function Page() {
 
 function BookForm() {
   const router = useRouter();
+  const { isStaff } = useAuth();
   const editId = useSearchParams().get("edit");
   const isEditing = Boolean(editId);
 
@@ -40,11 +42,12 @@ function BookForm() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isStaff) return;
     api
       .getAiStatus()
       .then((s) => setAiEnabled(s.enabled))
       .catch(() => setAiEnabled(false));
-  }, []);
+  }, [isStaff]);
 
   useEffect(() => {
     if (!editId) return;
@@ -129,6 +132,17 @@ function BookForm() {
   };
 
   if (loading) return <div className="surface h-96 animate-pulse rounded-xl" />;
+
+  // Reached by typing the URL rather than by following a link, since the navigation
+  // hides it. Says so plainly instead of presenting a form that cannot be submitted.
+  if (!isStaff) {
+    return (
+      <EmptyState
+        title="Cataloguing is desk work."
+        hint="Your account can search and borrow, but not add or edit titles."
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

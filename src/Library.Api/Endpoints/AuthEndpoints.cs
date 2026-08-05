@@ -9,6 +9,17 @@ namespace Library.Api.Endpoints;
 
 public record TokenRequest(string AccountId);
 
+/// <summary>
+/// What the sign-in picker is told about an account.
+/// </summary>
+/// <remarks>
+/// Deliberately narrower than <see cref="DemoAccount"/>: no email address. The picker
+/// is reachable without a token, and it would be incoherent to protect the member
+/// roster behind a staff-only policy while handing the same addresses to anyone who
+/// opens the sign-in page.
+/// </remarks>
+public record DemoAccountListing(string Id, string Name, string Role, string Description);
+
 public static class AuthEndpoints
 {
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
@@ -69,18 +80,18 @@ public static class AuthEndpoints
             {
                 if (Disabled(options.Value)) return Results.NotFound();
 
-                var accounts = new List<DemoAccount>(DevelopmentTokenIssuer.StaffAccounts);
+                var accounts = DevelopmentTokenIssuer.StaffAccounts
+                    .Select(a => new DemoAccountListing(a.Id, a.Name, a.Role, a.Description))
+                    .ToList();
 
                 // Every seeded borrower is offered as a sign-in, so the member-side
                 // restrictions can be seen from the borrower's own point of view.
                 foreach (var member in await members.GetActiveAsync(ct))
                 {
-                    accounts.Add(new DemoAccount(
+                    accounts.Add(new DemoAccountListing(
                         Id: $"member-{member.Id}",
                         Name: member.FullName,
-                        Email: member.Email,
                         Role: LibraryRole.Member,
-                        MemberId: member.Id,
                         Description: member.OpenLoans == 1
                             ? "Borrower · 1 item out"
                             : $"Borrower · {member.OpenLoans} items out"));
@@ -107,12 +118,13 @@ public static class AuthEndpoints
                         statusCode: StatusCodes.Status404NotFound,
                         title: "Not found");
 
+                // The token itself carries the identity; echoing the account back would
+                // only repeat it, and would put the email address on an anonymous route.
                 return Results.Ok(new
                 {
                     accessToken = DevelopmentTokenIssuer.CreateToken(account, options.Value),
                     tokenType = "Bearer",
-                    expiresInSeconds = options.Value.DevelopmentIssuer.TokenLifetimeHours * 3600,
-                    account
+                    expiresInSeconds = options.Value.DevelopmentIssuer.TokenLifetimeHours * 3600
                 });
             })
             .AllowAnonymous()

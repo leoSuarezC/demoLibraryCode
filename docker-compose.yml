@@ -42,6 +42,15 @@ services:
     environment:
       ConnectionStrings__LibraryDb: "Server=db,1433;Database=LibrarySystem;User Id=sa;Password=Str0ng!Passw0rd;TrustServerCertificate=True;Encrypt=False"
       Cors__AllowedOrigins__0: "http://localhost:3000"
+
+      # Authentication. Set OIDC_AUTHORITY to a real issuer (Auth0, Entra ID, Clerk,
+      # Keycloak) and the local account picker switches itself off. Left empty, the
+      # demo signs in against the seeded accounts so the system can be reviewed
+      # without registering anywhere.
+      Authentication__Authority: "${OIDC_AUTHORITY:-}"
+      Authentication__Audience: "${OIDC_AUDIENCE:-library-api}"
+      Authentication__DevelopmentIssuer__Enabled: "true"
+
       # Optional. Without it the AI button is hidden rather than shown and broken.
       Gemini__ApiKey: "${GEMINI_API_KEY:-}"
       ASPNETCORE_ENVIRONMENT: Production

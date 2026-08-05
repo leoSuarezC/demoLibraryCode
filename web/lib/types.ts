@@ -102,12 +102,14 @@ export interface CurrentUser {
   memberId: string | null;
 }
 
+/**
+ * What the sign-in picker receives. Narrower than the account the API holds
+ * internally: no email address, because this list is served without a token.
+ */
 export interface DemoAccount {
   id: string;
   name: string;
-  email: string;
   role: string;
-  memberId: string | null;
   description: string;
 }
 
@@ -115,7 +117,6 @@ export interface TokenResponse {
   accessToken: string;
   tokenType: string;
   expiresInSeconds: number;
-  account: DemoAccount;
 }
 
 export interface AuthConfig {
