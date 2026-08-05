@@ -307,6 +307,20 @@ access is refused, a librarian is refused a delete, then search, a check-out, *t
 same idempotency key again*, a borrower being refused the roster, and a check-in. A
 mistake in the T-SQL fails the build rather than the demo.
 
+The same script runs by hand against anything already up, so a reviewer can watch it
+rather than take CI's word for it:
+
+```bash
+docker compose up --build            # one terminal
+pwsh scripts/smoke-test.ps1          # another, once the API answers
+```
+
+Two of its assertions are the ones worth watching. **The same idempotency key twice**
+must return the same loan and lend one copy, not two. **Three simultaneous check-outs**
+of the same title must take three *different* copies — that is `usp_CheckoutCopy`'s
+`UPDLOCK, READPAST` doing its job, and it is the assertion that fails if the locking
+hints are ever "tidied up".
+
 ---
 
 ## Known limitations
