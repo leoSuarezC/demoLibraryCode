@@ -54,4 +54,7 @@ public interface ILoanRepository
 
     /// <summary>Open loans across the library, most overdue first. Drives the staff dashboard.</summary>
     Task<IReadOnlyList<Loan>> GetOpenLoansAsync(int limit = 100, CancellationToken ct = default);
+
+    /// <summary>What one member is currently holding.</summary>
+    Task<IReadOnlyList<Loan>> GetOpenLoansForMemberAsync(Guid memberId, CancellationToken ct = default);
 }

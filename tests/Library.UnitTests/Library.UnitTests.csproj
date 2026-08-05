@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.10" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="NSubstitute" Version="6.0.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
@@ -22,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Library.Application\Library.Application.csproj" />
     <ProjectReference Include="..\..\src\Library.Infrastructure\Library.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Library.Api\Library.Api.csproj" />
   </ItemGroup>
 
 </Project>

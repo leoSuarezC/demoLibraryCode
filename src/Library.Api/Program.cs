@@ -1,4 +1,5 @@
 using Library.Api;
+using Library.Api.Auth;
 using Library.Api.Endpoints;
 using Library.Domain;
 using Library.Infrastructure;
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.Diagnostics;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddLibraryAuthentication(builder.Configuration);
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 
@@ -46,16 +48,28 @@ app.UseExceptionHandler(handler => handler.Run(async context =>
         .ExecuteAsync(context);
 }));
 
-await DatabaseInitializer.InitialiseAsync(app.Services);
+// Integration tests host the app without a database; everything else needs the
+// schema, the procedures and the seed in place before the first request.
+if (builder.Configuration.GetValue("Database:InitialiseOnStartup", true))
+{
+    await DatabaseInitializer.InitialiseAsync(app.Services);
+}
 
 app.UseCors(FrontendCorsPolicy);
+
+// Order matters: CORS first so a rejected preflight still answers correctly, then
+// establish who the caller is, then decide what they may do.
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapOpenApi();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
+    .AllowAnonymous()
     .WithTags("Diagnostics")
     .WithName("Health");
 
+app.MapAuthEndpoints();
 app.MapBookEndpoints();
 app.MapLoanEndpoints();
 app.MapMemberEndpoints();

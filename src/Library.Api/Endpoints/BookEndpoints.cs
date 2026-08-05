@@ -1,5 +1,6 @@
 using Library.Application.Catalog;
 using Library.Application.Contracts;
+using Library.Domain;
 
 namespace Library.Api.Endpoints;
 
@@ -7,8 +8,12 @@ public static class BookEndpoints
 {
     public static IEndpointRouteBuilder MapBookEndpoints(this IEndpointRouteBuilder app)
     {
+        // Reading is the group default; the writes below raise the bar individually.
+        // Stating the floor once means a new endpoint added here is protected by
+        // default rather than public by accident.
         var books = app.MapGroup("/api/books")
-            .WithTags("Books");
+            .WithTags("Books")
+            .RequireAuthorization(Policies.ReadCatalog);
 
         books.MapGet("/", async (
                 string? query,
@@ -52,6 +57,7 @@ public static class BookEndpoints
                 var result = await catalog.CreateAsync(request, ct);
                 return result.ToCreatedResult(book => $"/api/books/{book.Id}");
             })
+            .RequireAuthorization(Policies.WriteCatalog)
             .WithName("CreateBook")
             .WithSummary("Register a new title and its first copies");
 
@@ -61,6 +67,7 @@ public static class BookEndpoints
                 CatalogService catalog,
                 CancellationToken ct) =>
                 (await catalog.UpdateAsync(id, request, ct)).ToHttpResult())
+            .RequireAuthorization(Policies.WriteCatalog)
             .WithName("UpdateBook")
             .WithSummary("Correct a title's details");
 
@@ -70,15 +77,19 @@ public static class BookEndpoints
                 CatalogService catalog,
                 CancellationToken ct) =>
                 (await catalog.AddCopyAsync(id, request, ct)).ToHttpResult())
+            .RequireAuthorization(Policies.WriteCatalog)
             .WithName("AddCopy")
             .WithSummary("Register another physical copy of a title")
             .WithDescription("A barcode may be supplied; if omitted, the next one in sequence is issued.");
 
         books.MapDelete("/{id:guid}", async (Guid id, CatalogService catalog, CancellationToken ct) =>
                 (await catalog.DeleteAsync(id, ct)).ToNoContentResult())
+            .RequireAuthorization(Policies.DeleteCatalog)
             .WithName("DeleteBook")
             .WithSummary("Remove a title")
-            .WithDescription("Refused with 409 while any copy is still on loan.");
+            .WithDescription(
+                "Administrators only: removing a title destroys its loan history with it. " +
+                "Refused with 409 while any copy is still on loan.");
 
         return app;
     }

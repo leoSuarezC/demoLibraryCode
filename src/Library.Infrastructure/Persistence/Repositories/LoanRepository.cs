@@ -86,4 +86,14 @@ public class LoanRepository(LibraryDbContext db) : ILoanRepository
             .OrderBy(l => l.DueAtUtc)
             .Take(limit)
             .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Loan>> GetOpenLoansForMemberAsync(
+        Guid memberId,
+        CancellationToken ct = default) =>
+        await db.Loans
+            .Include(l => l.BookCopy).ThenInclude(c => c!.Book)
+            .Include(l => l.Member)
+            .Where(l => l.MemberId == memberId && l.ReturnedAtUtc == null)
+            .OrderBy(l => l.DueAtUtc)
+            .ToListAsync(ct);
 }

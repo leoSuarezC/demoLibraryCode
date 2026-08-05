@@ -116,4 +116,21 @@ public class LoanService(
         var open = await loans.GetOpenLoansAsync(limit, ct);
         return open.Select(l => l.ToSummary(now)).ToList();
     }
+
+    /// <summary>
+    /// What one member is holding.
+    /// </summary>
+    /// <remarks>
+    /// Takes the member id from the caller rather than reading it here, so the
+    /// decision of <em>whose</em> loans may be seen stays in one place: the endpoint,
+    /// which reads it off the token and never off the query string.
+    /// </remarks>
+    public async Task<IReadOnlyList<LoanSummary>> GetLoansForMemberAsync(
+        Guid memberId,
+        CancellationToken ct = default)
+    {
+        var now = clock.UtcNow;
+        var open = await loans.GetOpenLoansForMemberAsync(memberId, ct);
+        return open.Select(l => l.ToSummary(now)).ToList();
+    }
 }

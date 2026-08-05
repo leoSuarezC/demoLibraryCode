@@ -1,4 +1,5 @@
 using Library.Application.Abstractions;
+using Library.Domain;
 
 namespace Library.Api.Endpoints;
 
@@ -8,7 +9,12 @@ public static class AiEndpoints
 {
     public static IEndpointRouteBuilder MapAiEndpoints(this IEndpointRouteBuilder app)
     {
-        var ai = app.MapGroup("/api/ai").WithTags("AI");
+        // Enrichment spends a rate-limited quota on an external service. It is
+        // restricted to the people who catalogue, which is also the only place the
+        // result is useful.
+        var ai = app.MapGroup("/api/ai")
+            .WithTags("AI")
+            .RequireAuthorization(Policies.WriteCatalog);
 
         // The UI asks first and hides the button when enrichment is unavailable,
         // rather than offering an action that is guaranteed to disappoint.
