@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import type { BookDetail, MemberSummary } from "@/lib/types";
 import { AvailabilityBadge, CopyStatusBadge, OverduePill } from "@/components/Badges";
 import { ErrorNotice, Spinner, SuccessNotice } from "@/components/Feedback";
@@ -11,6 +12,7 @@ import { ErrorNotice, Spinner, SuccessNotice } from "@/components/Feedback";
 export default function BookDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { isStaff, isAdmin } = useAuth();
 
   const [book, setBook] = useState<BookDetail | null>(null);
   const [members, setMembers] = useState<MemberSummary[]>([]);
@@ -39,14 +41,18 @@ export default function BookDetailPage() {
       )
       .finally(() => setLoading(false));
 
-    api
-      .getMembers()
-      .then((m) => {
-        setMembers(m);
-        if (m.length > 0) setMemberId(m[0].id);
-      })
-      .catch(() => setMembers([]));
-  }, [id]);
+    // The roster is staff-only. A borrower viewing this page simply does not ask for
+    // it, rather than asking and swallowing a 403.
+    if (isStaff) {
+      api
+        .getMembers()
+        .then((m) => {
+          setMembers(m);
+          if (m.length > 0) setMemberId(m[0].id);
+        })
+        .catch(() => setMembers([]));
+    }
+  }, [id, isStaff]);
 
   /*
    * One key per intended borrowing, held until that borrowing succeeds.
@@ -149,12 +155,17 @@ export default function BookDetailPage() {
           <p className="mt-1 text-lg muted">{book.author}</p>
         </div>
         <div className="flex gap-2">
-          <Link href={`/books/new?edit=${book.id}`} className="btn-secondary">
-            Edit
-          </Link>
-          <button className="btn-secondary" onClick={remove} disabled={busy}>
-            Remove
-          </button>
+          {isStaff && (
+            <Link href={`/books/new?edit=${book.id}`} className="btn-secondary">
+              Edit
+            </Link>
+          )}
+          {/* Removing a title destroys its loan history; administrators only. */}
+          {isAdmin && (
+            <button className="btn-secondary" onClick={remove} disabled={busy}>
+              Remove
+            </button>
+          )}
         </div>
       </div>
 
@@ -175,9 +186,15 @@ export default function BookDetailPage() {
               <h2 className="text-sm font-semibold uppercase tracking-wide muted">
                 Copies
               </h2>
-              <button className="btn-secondary !px-3 !py-1 text-xs" onClick={addCopy} disabled={busy}>
-                Add a copy
-              </button>
+              {isStaff && (
+                <button
+                  className="btn-secondary !px-3 !py-1 text-xs"
+                  onClick={addCopy}
+                  disabled={busy}
+                >
+                  Add a copy
+                </button>
+              )}
             </div>
 
             {book.copies.length === 0 ? (
@@ -211,7 +228,7 @@ export default function BookDetailPage() {
                       )}
                     </div>
 
-                    {copy.status === "OnLoan" && (
+                    {isStaff && copy.status === "OnLoan" && (
                       <button
                         className="btn-secondary !px-3 !py-1 text-xs"
                         onClick={() => checkin(copy.id)}
@@ -230,7 +247,7 @@ export default function BookDetailPage() {
         <div className="space-y-6">
           <section className="surface rounded-xl p-5">
             <h2 className="text-sm font-semibold uppercase tracking-wide muted">
-              Lend a copy
+              {isStaff ? "Lend a copy" : "Availability"}
             </h2>
 
             <div className="mt-3">
@@ -240,34 +257,44 @@ export default function BookDetailPage() {
               />
             </div>
 
-            <label htmlFor="member" className="mt-4 block text-sm font-medium">
-              Member
-            </label>
-            <select
-              id="member"
-              className="field mt-1"
-              value={memberId}
-              onChange={(e) => setMemberId(e.target.value)}
-              disabled={members.length === 0}
-            >
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.fullName} ({m.openLoans} out)
-                </option>
-              ))}
-            </select>
+            {isStaff ? (
+              <>
+                <label htmlFor="member" className="mt-4 block text-sm font-medium">
+                  Member
+                </label>
+                <select
+                  id="member"
+                  className="field mt-1"
+                  value={memberId}
+                  onChange={(e) => setMemberId(e.target.value)}
+                  disabled={members.length === 0}
+                >
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.fullName} ({m.openLoans} out)
+                    </option>
+                  ))}
+                </select>
 
-            <button
-              className="btn-primary mt-4 w-full"
-              onClick={checkout}
-              disabled={busy || book.availableCopies === 0 || !memberId}
-            >
-              {busy ? <Spinner label="Working…" /> : "Check out"}
-            </button>
+                <button
+                  className="btn-primary mt-4 w-full"
+                  onClick={checkout}
+                  disabled={busy || book.availableCopies === 0 || !memberId}
+                >
+                  {busy ? <Spinner label="Working…" /> : "Check out"}
+                </button>
 
-            {book.availableCopies === 0 && book.totalCopies > 0 && (
-              <p className="mt-2 text-xs muted">
-                Every copy is out. Check one in to lend it again.
+                {book.availableCopies === 0 && book.totalCopies > 0 && (
+                  <p className="mt-2 text-xs muted">
+                    Every copy is out. Check one in to lend it again.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="mt-3 text-sm muted">
+                {book.availableCopies > 0
+                  ? "Ask at the desk to borrow this title."
+                  : "Every copy is currently out."}
               </p>
             )}
           </section>

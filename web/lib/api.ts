@@ -1,16 +1,30 @@
 import type {
   AiMetadataSuggestion,
+  AuthConfig,
   BookDetail,
   BookInput,
   BookSummary,
   CheckinResult,
   CheckoutResult,
+  CurrentUser,
+  DemoAccount,
   LoanSummary,
   MemberSummary,
   PagedResult,
+  TokenResponse,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5080";
+
+/**
+ * Held in a module variable rather than read from storage on every call, so this
+ * module stays unaware of where the session is kept. lib/auth.tsx owns that.
+ */
+let accessToken: string | null = null;
+
+export function setAccessToken(token: string | null) {
+  accessToken = token;
+}
 
 /**
  * Carries the server's ProblemDetails message so the UI can show what actually went
@@ -37,6 +51,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const headers = new Headers(init.headers);
   if (init.body) headers.set("Content-Type", "application/json");
   if (idempotencyKey) headers.set("Idempotency-Key", idempotencyKey);
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
 
   let response: Response;
   try {
@@ -56,10 +71,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const payload = text ? JSON.parse(text) : null;
 
   if (!response.ok) {
-    throw new ApiError(
-      payload?.detail ?? payload?.title ?? `Request failed (${response.status}).`,
-      response.status,
-    );
+    // 401 and 403 are different problems and deserve different words. "Sign in" is
+    // useless advice to someone who is already signed in and simply lacks the role.
+    const fallback =
+      response.status === 401
+        ? "Your session has expired. Please sign in again."
+        : response.status === 403
+          ? "Your role does not allow this action."
+          : `Request failed (${response.status}).`;
+
+    throw new ApiError(payload?.detail ?? payload?.title ?? fallback, response.status);
   }
 
   return payload as T;
@@ -137,6 +158,11 @@ export const api = {
     return request("/api/loans/open");
   },
 
+  /** What the signed-in member is holding. The server reads the member from the token. */
+  getMyLoans(): Promise<LoanSummary[]> {
+    return request("/api/loans/mine");
+  },
+
   getMembers(): Promise<MemberSummary[]> {
     return request("/api/members");
   },
@@ -149,6 +175,28 @@ export const api = {
     return request("/api/ai/enrich-metadata", {
       method: "POST",
       body: JSON.stringify({ title, author }),
+    });
+  },
+
+  // ---- Authentication ----
+
+  getAuthConfig(): Promise<AuthConfig> {
+    return request("/api/auth/config");
+  },
+
+  getCurrentUser(): Promise<CurrentUser> {
+    return request("/api/auth/me");
+  },
+
+  /** Accounts offered by the local sign-in. Absent when a real provider is configured. */
+  getDemoAccounts(): Promise<DemoAccount[]> {
+    return request("/api/auth/accounts");
+  },
+
+  issueDemoToken(accountId: string): Promise<TokenResponse> {
+    return request("/api/auth/token", {
+      method: "POST",
+      body: JSON.stringify({ accountId }),
     });
   },
 };

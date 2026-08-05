@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import type { BookSummary, PagedResult } from "@/lib/types";
 import { AvailabilityBadge } from "@/components/Badges";
 import { CardSkeleton, EmptyState, ErrorNotice } from "@/components/Feedback";
 
 export default function CataloguePage() {
+  const { isStaff } = useAuth();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [availableOnly, setAvailableOnly] = useState(false);
@@ -81,9 +83,11 @@ export default function CataloguePage() {
             Search by title, author, ISBN, subject or keyword.
           </p>
         </div>
-        <Link href="/books/new" className="btn-primary">
-          Add a book
-        </Link>
+        {isStaff && (
+          <Link href="/books/new" className="btn-primary">
+            Add a book
+          </Link>
+        )}
       </div>
 
       <div className="surface rounded-xl p-4">

@@ -94,6 +94,37 @@ export interface CheckinResult {
   feeCharged: number;
 }
 
+export interface CurrentUser {
+  subjectId: string | null;
+  name: string | null;
+  email: string | null;
+  roles: string[];
+  memberId: string | null;
+}
+
+export interface DemoAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  memberId: string | null;
+  description: string;
+}
+
+export interface TokenResponse {
+  accessToken: string;
+  tokenType: string;
+  expiresInSeconds: number;
+  account: DemoAccount;
+}
+
+export interface AuthConfig {
+  mode: "oidc" | "development";
+  authority: string | null;
+  audience: string;
+  roles: string[];
+}
+
 export interface BookInput {
   title: string;
   author: string;
