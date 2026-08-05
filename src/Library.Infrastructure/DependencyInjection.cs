@@ -2,6 +2,8 @@ using Library.Application.Abstractions;
 using Library.Application.Catalog;
 using Library.Application.Common;
 using Library.Application.Loans;
+using Library.Application.Members;
+using Library.Infrastructure.Ai;
 using Library.Infrastructure.Persistence;
 using Library.Infrastructure.Persistence.Queries;
 using Library.Infrastructure.Persistence.Repositories;
@@ -48,11 +50,43 @@ public static class DependencyInjection
 
         services.AddSingleton<IClock, SystemClock>();
 
+        services.AddAiEnrichment(configuration);
+
         // Use cases. They depend only on the ports above, which is what keeps them
         // testable without a database.
         services.AddScoped<CatalogService>();
         services.AddScoped<LoanService>();
+        services.AddScoped<MemberService>();
 
         return services;
+    }
+
+    private static void AddAiEnrichment(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<GeminiOptions>(configuration.GetSection(GeminiOptions.SectionName));
+
+        var options = configuration.GetSection(GeminiOptions.SectionName).Get<GeminiOptions>()
+                      ?? new GeminiOptions();
+
+        services.AddHttpClient<IAiMetadataService, GeminiMetadataService>(client =>
+            {
+                client.BaseAddress = new Uri(options.BaseUrl);
+                client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+            })
+            // A free-tier LLM endpoint is rate-limited and occasionally slow. The
+            // standard resilience handler adds retry with exponential backoff and
+            // jitter, a circuit breaker and a per-attempt timeout - so a rate-limit
+            // spike becomes a short wait rather than an error, and a sustained outage
+            // stops us hammering a service that is already unwell.
+            .AddStandardResilienceHandler(resilience =>
+            {
+                resilience.Retry.MaxRetryAttempts = 3;
+                resilience.Retry.Delay = TimeSpan.FromSeconds(1);
+                resilience.Retry.UseJitter = true;
+
+                resilience.AttemptTimeout.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+                resilience.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds * 3);
+                resilience.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(options.TimeoutSeconds * 4);
+            });
     }
 }
