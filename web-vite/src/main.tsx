@@ -1,14 +1,16 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { RouterProvider } from "react-router-dom";
+import { AuthProvider } from "@/lib/auth";
+import { router } from "./router";
 import "./globals.css";
 
-// Scaffolding placeholder. Routing, the app shell and the pages arrive in later
-// phases; this only proves the Vite + React + Tailwind toolchain builds and renders.
+// AuthProvider wraps the router so every route sees the session. It uses no router
+// hooks itself (only the API and sessionStorage), so it is free to sit outside.
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <main className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="font-serif text-3xl font-semibold tracking-tight">Athenaeum</h1>
-      <p className="mt-1 text-sm muted">React (Vite) client — setting up.</p>
-    </main>
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   </StrictMode>,
 );
