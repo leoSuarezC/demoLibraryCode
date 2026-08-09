@@ -77,7 +77,7 @@ jobs:
         run: kill "$(cat api.pid)" 2>/dev/null || true
 
   frontend:
-    name: Frontend
+    name: Frontend (Next.js)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -91,6 +91,38 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+  # The plain-React (Vite) client is a second, interchangeable frontend over the same
+  # API. It gets the same gate as web/: install, lint, type-check, build. The build
+  # script already runs `tsc` before `vite build`, but the explicit type-check keeps
+  # the step names aligned with the Next.js job and fails loudly on a type error.
+  frontend-vite:
+    name: Frontend (Vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-vite
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web-vite/package-lock.json
 
       - name: Install
         run: npm ci
