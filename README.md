@@ -54,6 +54,29 @@ npm install && npm run dev                  # http://localhost:3000
 dotnet test        # 105 tests, no database required
 ```
 
+### Choosing a frontend: Next.js or plain React (Vite)
+
+Two interchangeable clients ship with the repo. They talk to the same API and share
+the same API client, types, styling and components, so they render identically — run
+whichever you prefer.
+
+| Frontend | Stack | Folder | Dev URL |
+|---|---|---|---|
+| `web` | Next.js (App Router) · React 19 · SSR | [`web/`](web) | <http://localhost:3000> |
+| `web-vite` | Plain React 19 · Vite · React Router · SPA | [`web-vite/`](web-vite) | <http://localhost:5173> |
+
+```bash
+# Plain-React SPA, in a second terminal (the API from step 2 must be running)
+cd web-vite
+cp .env.example .env             # VITE_API_URL defaults to http://localhost:5080
+npm install && npm run dev       # http://localhost:5173
+```
+
+Both origins (`:3000` and `:5173`) are allow-listed in `Cors:AllowedOrigins`, so
+either runs against the API unchanged. Only the routing layer differs between them:
+`web` uses the Next.js App Router, `web-vite` uses React Router. See
+[`web-vite/README.md`](web-vite/README.md) for how the port is structured.
+
 ---
 
 ## Signing in
@@ -145,9 +168,9 @@ reaches the catalogue unreviewed.
 ```
 ┌─────────────────┐   HTTP/JSON + Bearer   ┌──────────────────────────────────┐
 │  web (Next.js)  │ ─────────────────────► │            Library.Api           │
-│  React 19 · TS  │                        │  endpoints · policies · JWT      │
-└─────────────────┘                        └────────────────┬─────────────────┘
-                                                            │
+│  web-vite (SPA) │                        │  endpoints · policies · JWT      │
+│  React 19 · TS  │                        └────────────────┬─────────────────┘
+└─────────────────┘                                         │
                                            ┌────────────────▼─────────────────┐
                                            │       Library.Application        │
                                            │   use cases · ports · DTOs       │
