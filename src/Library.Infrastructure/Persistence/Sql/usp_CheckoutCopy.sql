@@ -140,6 +140,11 @@ BEGIN
             END
         END
 
-        THROW;
+        -- THROW must be preceded by a semicolon-terminated statement. The statement
+        -- before it here is the END of the IF block above, which takes no terminator,
+        -- so the semicolon is stated explicitly. Without it SQL Server rejects the
+        -- whole CREATE with "Incorrect syntax near 'THROW'" (error 102), and since the
+        -- procedures are applied on start-up the API never begins listening.
+        ;THROW;
     END CATCH
 END
